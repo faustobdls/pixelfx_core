@@ -131,7 +131,9 @@ class Painter {
 
   void add(int sx, int sy, int c, [double k = 1.0]) {
     final kEff = k * fade * lightK;
-    if (kEff <= 0.004) return;
+    // `!(x > e)` instead of `x <= e` so a NaN intensity (sqrt/pow just past a
+    // domain edge, which JS shrugs off) skips the pixel instead of throwing.
+    if (!(kEff > 0.004)) return;
     final x = sx - ox;
     final y = sy - oy;
     if (x < 0 || y < 0 || x >= w || y >= h) return;
@@ -146,7 +148,7 @@ class Painter {
   /// Blend a color over what's there at alpha [a] (0..1), keeping the result's own alpha.
   void blendPx(int sx, int sy, int c, double a) {
     final alphaEff = a * fade;
-    if (c == 0 || alphaEff <= 0.004) return;
+    if (c == 0 || !(alphaEff > 0.004)) return;
     final x = sx - ox;
     final y = sy - oy;
     if (x < 0 || y < 0 || x >= w || y >= h) return;
