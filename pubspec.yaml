@@ -1,0 +1,12 @@
+name: pixelfx_core
+description: Deterministic, code-driven dual-buffer pixel art VFX, 3D IK pixel rig, acting system, and multi-domain extension framework in pure Dart.
+version: 0.1.0
+repository: https://github.com/faustobdls/pixelfx_flutter
+resolution: workspace
+
+environment:
+  sdk: ^3.14.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
