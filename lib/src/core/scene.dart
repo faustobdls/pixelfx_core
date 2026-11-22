@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'color.dart';
 import 'math.dart';
 
-enum BackdropKind { dark, ground, sky, light, black, none }
+enum BackdropKind { dark, ground, sky, light, black, isoGrid, none }
 
 final int _sky = hex('#15131d');
 final int _skyTop = hex('#0d0b14');
@@ -15,6 +15,9 @@ final int _floorEdge = hex('#4a4263');
 final int _floor = hex('#2b2639');
 final int _floorDark = hex('#211d2d');
 final int _mortar = hex('#1a1724');
+final int _isoTileA = hex('#1c1829');
+final int _isoTileB = hex('#181524');
+final int _isoEdge = hex('#312a47');
 final int _lightBg = hex('#ebe8f0');
 final int _starTint = hex('#cfc8ff');
 
@@ -40,6 +43,33 @@ Uint32List? backdrop(BackdropKind kind, int w, int h, [int? groundY]) {
   }
   if (kind == BackdropKind.black) {
     out.fillRange(0, out.length, kBlack);
+    return out;
+  }
+  if (kind == BackdropKind.isoGrid) {
+    final cx = w ~/ 2;
+    final cy = groundY ?? (h * 0.65).round();
+    final rx = math.max(1.0, w * 0.58);
+    final ry = math.max(1.0, h * 0.58);
+    for (var y = 0; y < h; y++) {
+      final dy = y - cy;
+      for (var x = 0; x < w; x++) {
+        final dx = x - cx;
+        final a = dx + 2 * dy;
+        final b = 2 * dy - dx;
+        final tx = (a / 32.0).floor();
+        final ty = (b / 32.0).floor();
+        final ra = a - tx * 32;
+        final rb = b - ty * 32;
+        final edge = ra <= 1 || rb <= 1;
+        var c = edge ? _isoEdge : (((tx + ty) & 1) == 0 ? _isoTileA : _isoTileB);
+        final dist = math.sqrt((dx / rx) * (dx / rx) + (dy / ry) * (dy / ry));
+        final vig = clamp((dist - 0.55) / 0.55) * 0.72;
+        if (vig > 0.0) {
+          c = mix(c, _skyTop, vig);
+        }
+        out[y * w + x] = c;
+      }
+    }
     return out;
   }
   final gy0 = groundY ?? h;

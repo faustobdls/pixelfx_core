@@ -13,6 +13,9 @@ typedef Vec3 = (double x, double y, double z);
 typedef Mat3 = List<double>; // length 9, row-major
 
 const double _deg = math.pi / 180.0;
+
+/// Classic 2:1 dimetric isometric camera pitch (`atan(0.5)` ≈ 26.565 deg).
+const double kIsoCameraPitch = 0.4636476090008061;
 const int _w0 = 24;
 const int _h0 = 38;
 
@@ -42,6 +45,12 @@ double _len(Vec3 a) => math.sqrt(a.$1 * a.$1 + a.$2 * a.$2 + a.$3 * a.$3);
 Vec3 _unit(Vec3 a) {
   final l = _len(a);
   return _mul(a, 1.0 / (l == 0.0 ? 1e-6 : l));
+}
+
+Mat3 _rotX(double t) {
+  final c = math.cos(t);
+  final s = math.sin(t);
+  return [1, 0, 0, 0, c, -s, 0, s, c];
 }
 
 Mat3 _rotY(double t) {
@@ -710,6 +719,25 @@ void _turnAll(_SolvedSkeleton s, double a) {
   s.side = rot(s.side);
 }
 
+void _pitchAll(_SolvedSkeleton s, double pitch) {
+  final r = _rotX(pitch);
+  Vec3 rot(Vec3 v) => _mv(r, v);
+  for (final f in s.b.values) {
+    f.t = rot(f.t);
+    f.r = _mm(r, f.r);
+  }
+  for (final arm in [s.armN, s.armF, s.legN, s.legF]) {
+    arm.joint = rot(arm.joint);
+    arm.end = rot(arm.end);
+  }
+  s.sN = rot(s.sN);
+  s.sF = rot(s.sF);
+  s.hipN = rot(s.hipN);
+  s.hipF = rot(s.hipF);
+  s.axis = rot(s.axis);
+  s.side = rot(s.side);
+}
+
 class PosedFigure {
   final int n;
   final Int16List xs;
@@ -1282,14 +1310,15 @@ class RigRasterizer {
     );
   }
 
-  PosedFigure _render(Pose pose) {
+  PosedFigure _render(Pose pose, {double pitch = 0.0}) {
     final s = _solve(pose, weapons);
     final q = s.q;
     final whole = (q.yaw ?? 0.0) + (q.face == -1 ? math.pi : 0.0);
     if (whole != 0.0) _turnAll(s, whole);
+    if (pitch != 0.0) _pitchAll(s, pitch);
     final air = (q.y ?? 0.0) < -0.5;
-    _clipBody = !air;
-    _clipWeapon = !air;
+    _clipBody = pitch == 0.0 && !air;
+    _clipWeapon = pitch == 0.0 && !air;
     _drawBody(s);
     _clipBody = false;
     if (s.w != null) {
@@ -1308,6 +1337,11 @@ class RigRasterizer {
         ax = _mv(r, ax);
         sd = _mv(r, sd);
       }
+      if (pitch != 0.0) {
+        final rx = _rotX(pitch);
+        ax = _mv(rx, ax);
+        sd = _mv(rx, sd);
+      }
       s.ow!.draw(
         _AlongPlotter(this, s.armF.end, ax, sd, _PartId.offWeapon),
         q,
@@ -1318,8 +1352,9 @@ class RigRasterizer {
     return _finish(s);
   }
 
-  String _keyOf(Pose p) {
+  String _keyOf(Pose p, double pitch) {
     final buf = StringBuffer();
+    if (pitch != 0.0) buf.write('pitch${(pitch * 100.0).round()},');
     if ((p.y ?? 0.0) < -0.5) buf.write('air,');
     final map = p.toJson();
     final keys = map.keys.toList()..sort();
@@ -1341,12 +1376,12 @@ class RigRasterizer {
     return buf.toString();
   }
 
-  PosedFigure posed(Pose pose) {
-    final key = _keyOf(pose);
+  PosedFigure posed(Pose pose, {double pitch = 0.0}) {
+    final key = _keyOf(pose, pitch);
     var r = _cache[key];
     if (r == null) {
       if (_cache.length > 6000) _cache.clear();
-      r = _render(pose);
+      r = _render(pose, pitch: pitch);
       _cache[key] = r;
     }
     return r;
@@ -1362,11 +1397,12 @@ class RigRasterizer {
     return math.max(near, far);
   }
 
-  SkeletonView skeleton(Pose pose) {
+  SkeletonView skeleton(Pose pose, {double pitch = 0.0}) {
     final s = _solve(pose, weapons);
     final q = s.q;
     final whole = (q.yaw ?? 0.0) + (q.face == -1 ? math.pi : 0.0);
     if (whole != 0.0) _turnAll(s, whole);
+    if (pitch != 0.0) _pitchAll(s, pitch);
     final b = s.b;
     Vec3 at(BoneFrame f, Vec3 v) => _add(f.t, _mv(f.r, v));
     final raw = <String, Vec3>{
@@ -1410,11 +1446,11 @@ class RigRasterizer {
     );
   }
 
-  List<PosedPart> posedParts(Pose pose) {
+  List<PosedPart> posedParts(Pose pose, {double pitch = 0.0}) {
     final out = <PosedPart>[];
     for (final e in _PartId.all.entries) {
       _onlyPart = e.value;
-      final r = _render(pose);
+      final r = _render(pose, pitch: pitch);
       _onlyPart = 0;
       if (r.n == 0) continue;
       var cx = 0.0;
@@ -1439,8 +1475,10 @@ class RigRasterizer {
   }
 }
 
-PosedFigure posed(Pose pose) => RigRasterizer.instance.posed(pose);
+PosedFigure posed(Pose pose, {double pitch = 0.0}) =>
+    RigRasterizer.instance.posed(pose, pitch: pitch);
 double shortfall(Pose pose) => RigRasterizer.instance.shortfall(pose);
-SkeletonView skeleton(Pose pose) => RigRasterizer.instance.skeleton(pose);
-List<PosedPart> posedParts(Pose pose) =>
-    RigRasterizer.instance.posedParts(pose);
+SkeletonView skeleton(Pose pose, {double pitch = 0.0}) =>
+    RigRasterizer.instance.skeleton(pose, pitch: pitch);
+List<PosedPart> posedParts(Pose pose, {double pitch = 0.0}) =>
+    RigRasterizer.instance.posedParts(pose, pitch: pitch);

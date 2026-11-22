@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:pixelfx_core/pixelfx_core.dart';
@@ -104,6 +105,32 @@ void main() {
       expect(sk.joints['handN']!.$2, closeTo(-22.0, 1e-6));
       expect(sk.joints['handN']!.$3, closeTo(4.5, 1e-6));
       expect(WeaponRegistry.instance.names.length, 11);
+    });
+
+    test('BackdropKind.isoGrid and RigRasterizer isometric pitch across 8 yaws', () {
+      final isoBg = backdrop(BackdropKind.isoGrid, 64, 48, 30);
+      expect(isoBg, isNotNull);
+      expect(isoBg!.length, 64 * 48);
+      expect(isoBg.toSet().length, greaterThan(2));
+
+      final front = posed(kStand);
+      final pitched = posed(kStand, pitch: kIsoCameraPitch);
+      expect(pitched.n, greaterThan(0));
+      expect(pitched.y1, greaterThanOrEqualTo(front.y1));
+
+      for (var dir = 0; dir < 8; dir++) {
+        final yaw = dir * (math.pi / 4.0);
+        final fig = posed(
+          kStand.copyWith(weapon: 'sword', yaw: yaw),
+          pitch: kIsoCameraPitch,
+        );
+        expect(fig.n, greaterThan(0), reason: 'Empty figure for dir=$dir');
+        final sk = skeleton(
+          kStand.copyWith(yaw: yaw),
+          pitch: kIsoCameraPitch,
+        );
+        expect(sk.joints['head']!.$2, lessThan(sk.joints['pelvis']!.$2));
+      }
     });
 
     test('Simulated effect sub-stepping is deterministic and ends clean', () {
